@@ -77,6 +77,12 @@ export default function AdminDashboard({
 
   // Profit/Earnings report data
   const [reportType, setReportType] = useState<"daily" | "monthly">("daily");
+  const [selectedReportDate, setSelectedReportDate] = useState<string>(
+    new Date().toISOString().split("T")[0]
+  );
+  const [selectedReportMonth, setSelectedReportMonth] = useState<string>(
+    new Date().toISOString().split("T")[0].substring(0, 7)
+  );
   
   // Local Settings edit state
   const [localSettings, setLocalSettings] = useState<SystemSettings>(settings);
@@ -295,60 +301,457 @@ export default function AdminDashboard({
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    const reportTitle = reportType === "daily" ? "Daily Sales Statement Report" : "Monthly Profit & Costs Audit Report";
-    const reportRows = orders.map(o => `
-      <tr>
-        <td style="padding: 8px; border: 1px solid #ddd; font-family: monospace;">${o.id}</td>
-        <td style="padding: 8px; border: 1px solid #ddd;">${o.userName}</td>
-        <td style="padding: 8px; border: 1px solid #ddd; font-family: monospace;">${o.date.split("T")[0]}</td>
-        <td style="padding: 8px; border: 1px solid #ddd; text-align: center; font-weight: bold; color: ${o.status === OrderStatus.DELIVERED ? 'green' : o.status === OrderStatus.CANCELLED ? 'red' : 'orange'}">${o.status}</td>
-        <td style="padding: 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">$${o.totalUSD}</td>
-      </tr>
-    `).join("");
+    // Filter delivered orders specifically for this report's filtered date or month
+    const targetOrders = orders.filter(o => {
+      if (o.status !== OrderStatus.DELIVERED) return false;
+      const orderDay = o.date ? o.date.split("T")[0] : "";
+      if (reportType === "daily") {
+        return orderDay === selectedReportDate;
+      } else {
+        return orderDay.substring(0, 7) === selectedReportMonth;
+      }
+    });
+
+    const reportTitle = reportType === "daily" 
+      ? `Daily Sales Stat & Performance Statement` 
+      : `Monthly Profit Audit & Financial Cost Statement`;
+
+    const reportPeriodVal = reportType === "daily" ? selectedReportDate : selectedReportMonth;
+
+    // Financial Metrics
+    const salesTotalVal = targetOrders.reduce((sum, o) => sum + o.totalUSD, 0);
+    const subtotalVal = targetOrders.reduce((sum, o) => sum + o.subtotalUSD, 0);
+    const deliveryFeesVal = targetOrders.reduce((sum, o) => sum + o.deliveryCostUSD, 0);
+    const discountFeesVal = targetOrders.reduce((sum, o) => sum + o.discountUSD, 0);
+    const simulatedCOGS = salesTotalVal * 0.65; // Goods standard cost (65%)
+    const netEarningsVal = salesTotalVal - simulatedCOGS;
+
+    // Dynamic items conversion for premium list representation
+    const reportRows = targetOrders.length === 0 
+      ? `<tr><td colspan="6" style="padding: 24px; text-align: center; color: #94a3b8; font-size: 11px;">No settled sales records found for this period.</td></tr>`
+      : targetOrders.map(o => {
+          const itemsDesc = o.items.map(i => `${language === "ar" ? i.productNameAr : i.productNameEn} (qty: ${i.quantity})`).join(", ");
+          return `
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 10px 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold; color: #4f46e5;">#${o.id.substring(0, 8).toUpperCase()}</td>
+              <td style="padding: 10px 8px; font-size: 11px;">
+                <div style="font-weight: 700; color: #0f172a;">${o.userName}</div>
+                <div style="font-size: 10px; color: #64748b; font-family: monospace;">${o.phone}</div>
+              </td>
+              <td style="padding: 10px 8px; font-size: 11px; color: #475569;">${o.date ? o.date.replace("T", " ").substring(0, 16) : ""}</td>
+              <td style="padding: 10px 8px; font-size: 10px; color: #334155; max-width: 250px; line-height: 1.4;">${itemsDesc}</td>
+              <td style="padding: 10px 8px; font-size: 11px; text-align: center;">
+                ${o.couponCode ? `<span style="background-color: #fef2f2; border: 1px solid #fee2e2; color: #b91c1c; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-family: monospace;">${o.couponCode} (-$${o.discountUSD})</span>` : `<span style="color: #94a3b8;">—</span>`}
+              </td>
+              <td style="padding: 10px 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: bold; text-align: right; color: #0f172a;">$${o.totalUSD.toLocaleString()}</td>
+            </tr>
+          `;
+        }).join("");
 
     printWindow.document.write(`
+      <!DOCTYPE html>
       <html>
         <head>
+          <meta charset="utf-8">
           <title>${reportTitle}</title>
+          <link rel="preconnect" href="https://fonts.googleapis.com">
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+          <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
           <style>
-            body { font-family: sans-serif; padding: 25px; direction: ltr; }
-            .header { text-align: center; border-bottom: 2px solid #222; margin-bottom: 20px; padding-bottom: 15px; }
-            table { width: 105%; border-collapse: collapse; margin-top: 15px; }
-            th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-            th { background-color: #f8fafc; }
-            .summary-box { background-color: #f1f5f9; padding: 15px; border-radius: 8px; display: flex; justify-content: space-between; margin-bottom: 20px; font-weight: bold;}
+            @page {
+              size: A4;
+              margin: 15mm;
+            }
+            body {
+              font-family: 'Inter', system-ui, sans-serif;
+              color: #0f172a;
+              background-color: #ffffff;
+              margin: 0;
+              padding: 0;
+              line-height: 1.5;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .layout-box {
+              max-width: 800px;
+              margin: 0 auto;
+            }
+            .header-bar {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              border-bottom: 2px solid #0f172a;
+              padding-bottom: 16px;
+              margin-bottom: 24px;
+            }
+            .app-logo-area {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+            }
+            .logo-square {
+              width: 32px;
+              height: 32px;
+              background-color: #4f46e5;
+              color: white;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-weight: 800;
+              border-radius: 8px;
+              font-size: 18px;
+            }
+            .title-h1 {
+              font-size: 20px;
+              font-weight: 800;
+              color: #0f172a;
+              margin: 0;
+            }
+            .subtitle-p {
+              font-size: 11px;
+              color: #64748b;
+              margin: 2px 0 0 0;
+              font-weight: 500;
+            }
+            .doc-label-box {
+              text-align: right;
+            }
+            .doc-badge {
+              font-size: 10px;
+              font-weight: 850;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+              color: #4f46e5;
+              background-color: #e0e7ff;
+              border: 1px solid #c7d2fe;
+              padding: 3px 8px;
+              border-radius: 4px;
+              display: inline-block;
+              margin-bottom: 6px;
+            }
+            .meta-p {
+              font-size: 10px;
+              color: #475569;
+              margin: 1px 0;
+            }
+            .p-banner {
+              background: linear-gradient(135deg, #0f172a, #1e293b);
+              color: white;
+              border-radius: 8px;
+              padding: 14px 18px;
+              margin-bottom: 24px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            }
+            .p-label {
+              font-size: 9px;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+              color: #94a3b8;
+              font-weight: 700;
+            }
+            .p-value {
+              font-size: 18px;
+              font-weight: 800;
+              margin-top: 2px;
+              font-family: 'JetBrains Mono', monospace;
+            }
+            .p-count {
+              font-size: 10px;
+              background-color: rgba(56, 189, 248, 0.15);
+              color: #38bdf8;
+              border: 1px solid rgba(56, 189, 248, 0.3);
+              padding: 3px 8px;
+              border-radius: 12px;
+              font-weight: bold;
+              font-family: 'JetBrains Mono', monospace;
+            }
+            .dashboard-grid {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 12px;
+              margin-bottom: 24px;
+            }
+            .card-bento {
+              border: 1px dashed #cbd5e1;
+              border-radius: 8px;
+              padding: 12px;
+              background-color: #f8fafc;
+            }
+            .card-lbl {
+              font-size: 9px;
+              color: #64748b;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            .card-val {
+              font-size: 18px;
+              font-weight: 800;
+              margin-top: 4px;
+              font-family: 'JetBrains Mono', monospace;
+              color: #0d1527;
+            }
+            .card-val.green {
+              color: #047857;
+            }
+            .card-sub {
+              font-size: 8.5px;
+              color: #94a3b8;
+              margin-top: 2px;
+              font-family: 'JetBrains Mono', monospace;
+            }
+            .table-container {
+              margin-top: 20px;
+            }
+            .tbl-header {
+              font-size: 11px;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              margin-bottom: 8px;
+              color: #334155;
+              border-bottom: 1.5px solid #0f172a;
+              padding-bottom: 4px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 24px;
+            }
+            th {
+              background-color: #0f172a;
+              color: #ffffff;
+              font-size: 9px;
+              font-weight: 700;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              padding: 8px;
+              text-align: left;
+            }
+            .financial-ledger {
+              border: 1.5px solid #0f172a;
+              border-radius: 8px;
+              overflow: hidden;
+              margin-bottom: 30px;
+            }
+            .ledger-head {
+              background-color: #0f172a;
+              color: white;
+              font-size: 10px;
+              font-weight: 800;
+              text-transform: uppercase;
+              padding: 8px 12px;
+              letter-spacing: 0.5px;
+            }
+            .ledger-row {
+              display: flex;
+              justify-content: space-between;
+              padding: 8px 12px;
+              border-bottom: 1px solid #e2e8f0;
+              font-size: 10.5px;
+            }
+            .row-lbl {
+              color: #475569;
+              font-weight: 500;
+            }
+            .row-val {
+              font-weight: 700;
+              font-family: 'JetBrains Mono', monospace;
+            }
+            .row-val.red {
+              color: #b91c1c;
+            }
+            .ledger-row.grand {
+              background-color: #f0fdf4;
+              border-top: 2px solid #047857;
+              border-bottom: none;
+              font-size: 12px;
+            }
+            .grand .row-lbl {
+              color: #065f46;
+              font-weight: 800;
+            }
+            .grand .row-val {
+              color: #047857;
+              font-weight: 805;
+              font-size: 13px;
+            }
+            .sig-area {
+              display: flex;
+              justify-content: space-between;
+              margin-top: 45px;
+              padding-top: 24px;
+            }
+            .sig-block {
+              width: 210px;
+              text-align: center;
+            }
+            .sig-line {
+              border-bottom: 1px solid #94a3b8;
+              height: 35px;
+              margin-bottom: 6px;
+            }
+            .sig-title {
+              font-size: 9.5px;
+              font-weight: 700;
+              color: #334155;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            .sig-desc {
+              font-size: 8.5px;
+              color: #94a3b8;
+              margin-top: 1px;
+            }
+            .disclaimer {
+              margin-top: 40px;
+              border-top: 1.5px dashed #cbd5e1;
+              padding-top: 12px;
+              text-align: center;
+              font-size: 8.5px;
+              color: #94a3b8;
+              letter-spacing: 0.25px;
+            }
           </style>
         </head>
         <body>
-          <div class="header">
-            <h1>${reportTitle}</h1>
-            <h2>${settings.appNameEn} / ${settings.appNameAr}</h2>
-            <p>Report Date generation stamp: ${new Date().toLocaleString()}</p>
+          <div class="layout-box">
+            <!-- Header section Info -->
+            <div class="header-bar">
+              <div class="app-logo-area">
+                <div class="logo-square">${settings.appNameEn ? settings.appNameEn.substring(0,1).toUpperCase() : 'C'}</div>
+                <div>
+                  <h1 class="title-h1">${settings.appNameEn || "Cedars Market"}</h1>
+                  <p class="subtitle-p">${settings.appNameAr || "مكتب المحاسبة وجرد الأرباح"}</p>
+                </div>
+              </div>
+              <div class="doc-label-box">
+                <div class="doc-badge">Official Financial Log</div>
+                <p class="meta-p"><span class="meta-label">ID Reference:</span> FIN-${reportType.substring(0, 1).toUpperCase()}-${reportPeriodVal.replace("-", "")}</p>
+                <p class="meta-p"><span class="meta-label">Printed At:</span> ${new Date().toLocaleString()}</p>
+              </div>
+            </div>
+
+            <!-- Active Target Period Banner -->
+            <div class="p-banner">
+              <div>
+                <div class="p-label">Statement Audit Target Period</div>
+                <div class="p-value">${reportType === "daily" ? `Day of ${reportPeriodVal}` : `Month of ${reportPeriodVal}`}</div>
+              </div>
+              <div class="p-count">
+                ${targetOrders.length} Settled Invoices
+              </div>
+            </div>
+
+            <!-- Quick Metrics Overview -->
+            <div class="dashboard-grid">
+              <div class="card-bento">
+                <div class="card-lbl">Gross Receipts (USD)</div>
+                <div class="card-val">$${salesTotalVal.toLocaleString()}</div>
+                <div class="card-sub">LBP ${(salesTotalVal * settings.usdToLbpRate).toLocaleString()}</div>
+              </div>
+              <div class="card-bento">
+                <div class="card-lbl">Est. Goods Sourcing COGS</div>
+                <div class="card-val">$${simulatedCOGS.toLocaleString()}</div>
+                <div class="card-sub">65% cost model calculation</div>
+              </div>
+              <div class="card-bento" style="border-style: solid; border-color: #a7f3d0;">
+                <div class="card-lbl" style="color: #047857;">Est. Net Statement Earnings</div>
+                <div class="card-val green">$${netEarningsVal.toLocaleString()}</div>
+                <div class="card-sub" style="color: #059669;">LBP ${(netEarningsVal * settings.usdToLbpRate).toLocaleString()}</div>
+              </div>
+            </div>
+
+            <!-- Table of settled Orders -->
+            <div class="table-container">
+              <div class="tbl-header">Delivered Orders Register List</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 15%;">Ref ID</th>
+                    <th style="width: 25%;">Client details</th>
+                    <th style="width: 18%;">Settle Stamp</th>
+                    <th style="width: 30%;">Cart skus inside invoice</th>
+                    <th style="width: 18%; text-align: center;">Coupon Code</th>
+                    <th style="width: 14%; text-align: right;">Total Paid</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${reportRows}
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Double-entry financial balance sheets Ledger -->
+            <div class="financial-ledger">
+              <div class="ledger-head">System Financial Balance Sheet</div>
+              
+              <div class="ledger-row">
+                <span class="row-lbl">Total Gross Value of Purchased Goods</span>
+                <span class="row-val">$${subtotalVal.toLocaleString()}</span>
+              </div>
+              
+              <div class="ledger-row">
+                <span class="row-lbl">Add: Delivery Sector Collections (Direct Shipping Transit)</span>
+                <span class="row-val">+$${deliveryFeesVal.toLocaleString()}</span>
+              </div>
+
+              <div class="ledger-row">
+                <span class="row-lbl">Less: User Coupon Discount Claims (Subsidized by Admin Campaign)</span>
+                <span class="row-val red">-$${discountFeesVal.toLocaleString()}</span>
+              </div>
+
+              <div class="ledger-row">
+                <span class="row-lbl">Grand Audited Gross Revenue (Including Delivery Subtotals)</span>
+                <span class="row-val" style="color: #4f46e5;">$${salesTotalVal.toLocaleString()}</span>
+              </div>
+
+              <div class="ledger-row">
+                <span class="row-lbl">Less: COGS Model Deductions (Representing 65% base sourcing expenditure)</span>
+                <span class="row-val red">-$${simulatedCOGS.toLocaleString()}</span>
+              </div>
+
+              <div class="ledger-row grand">
+                <span class="row-lbl">Audited Net Profit Balance (USD/LBP Dual)</span>
+                <span class="row-val">$${netEarningsVal.toLocaleString()} USD / LBP ${(netEarningsVal * settings.usdToLbpRate).toLocaleString()}</span>
+              </div>
+            </div>
+
+            <!-- Audit execution signatures -->
+            <div class="sig-area">
+              <div class="sig-block">
+                <div class="sig-line"></div>
+                <div class="sig-title">Prepared By Auditor</div>
+                <div class="sig-desc">Financial Controller stamp</div>
+              </div>
+
+              <div class="sig-block">
+                <div class="sig-line"></div>
+                <div class="sig-title">System Administrator</div>
+                <div class="sig-desc">Verified & Approved signature</div>
+              </div>
+
+              <div class="sig-block">
+                <div class="sig-line"></div>
+                <div class="sig-title">Executive Stamp</div>
+                <div class="sig-desc">Cedars Regional Authority</div>
+              </div>
+            </div>
+
+            <div class="disclaimer">
+              Generated securely from Cedars Direct Administrative Portal Core. Under local regulations, all statements constitute preliminary reports for audits.
+            </div>
           </div>
-          <div class="summary-box">
-            <div>Product Sales: $${totalIncomingSales.toLocaleString()}</div>
-            <div>Estimated Goods Margin Costs: $${totalIncomingCostCost.toLocaleString()}</div>
-            <div>Simulated Net Profit Value: $${netEarningsSum.toLocaleString()}</div>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Order ID</th>
-                <th>Purchaser Member</th>
-                <th>ISO Date</th>
-                <th>Current Status</th>
-                <th>Grand Total (USD)</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${reportRows}
-            </tbody>
-          </table>
         </body>
       </html>
     `);
     printWindow.document.close();
-    printWindow.print();
+    // A micro timeout ensures the system completely renders and styles the dynamic page
+    setTimeout(() => {
+      printWindow.print();
+    }, 450);
   };
 
   return (
@@ -1268,65 +1671,174 @@ export default function AdminDashboard({
           )}
 
           {/* 11. REVENUE CALCULATOR WITH PRINT OPTION FOR FINANCIAL STATEMENTS (Req - 47) */}
-          {activeTab === "revenue_calculator" && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center select-none">
-                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 font-sans uppercase animate-fade-in-down">
-                  {t("profitMargin")}
-                </h3>
-                <div className="flex gap-2">
-                  <select
-                    value={reportType}
-                    onChange={(e: any) => setReportType(e.target.value)}
-                    className="p-1.5 text-xs bg-slate-100 rounded-lg"
-                  >
-                    <option value="daily">Daily Statement</option>
-                    <option value="monthly">Monthly Audit</option>
-                  </select>
-                  <button
-                    onClick={handlePrintAuditReport}
-                    className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-transform"
-                  >
-                    <Printer className="w-4 h-4" />
-                    <span>{t("printReport")}</span>
-                  </button>
-                </div>
-              </div>
+          {activeTab === "revenue_calculator" && (() => {
+            const filteredReportOrdersOnScreen = orders.filter(o => {
+              if (o.status !== OrderStatus.DELIVERED) return false;
+              const orderDay = o.date ? o.date.split("T")[0] : "";
+              if (reportType === "daily") {
+                return orderDay === selectedReportDate;
+              } else {
+                return orderDay.substring(0, 7) === selectedReportMonth;
+              }
+            });
 
-              {/* Financial calculations visualization display */}
-              <div className="p-5 rounded-3xl bg-slate-50 dark:bg-slate-950 border grid grid-cols-1 sm:grid-cols-3 gap-6 text-start">
-                <div>
-                  <span className="text-3s text-slate-400 font-mono">TOTAL COMPLETED REVENUE</span>
-                  <p className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono mt-1">${totalIncomingSales.toLocaleString()}</p>
-                </div>
-                <div>
-                  <span className="text-3s text-slate-400 font-mono">DELIVERY SECTOR FEES</span>
-                  <p className="text-xl font-black text-slate-800 dark:text-slate-100 font-mono mt-1">${(orders.filter(o => o.status === OrderStatus.DELIVERED).reduce((sum, o) => sum + o.deliveryCostUSD, 0)).toLocaleString()}</p>
-                </div>
-                <div className="border-l pl-4 border-dashed">
-                  <span className="text-3s text-slate-400 font-mono text-emerald-600">AUDITED NET CASH PROFIT</span>
-                  <p className="text-xl font-black text-emerald-600 font-mono mt-1">${netEarningsSum.toLocaleString()}</p>
-                </div>
-              </div>
+            const onScreenSalesVal = filteredReportOrdersOnScreen.reduce((sum, o) => sum + o.totalUSD, 0);
+            const onScreenDeliveryFeesVal = filteredReportOrdersOnScreen.reduce((sum, o) => sum + o.deliveryCostUSD, 0);
+            const onScreenDiscountFeesVal = filteredReportOrdersOnScreen.reduce((sum, o) => sum + o.discountUSD, 0);
+            const onScreenCogsVal = onScreenSalesVal * 0.65;
+            const onScreenNetEarningsVal = onScreenSalesVal - onScreenCogsVal;
 
-              {/* Graphical Profit Margin Area chart */}
-              <div className="p-5 rounded-3xl bg-slate-950 text-white border text-start">
-                <span className="text-xs font-bold text-slate-400 font-mono">Interactive profit index (last 30 days)</span>
-                
-                {/* SVG vector chart representation */}
-                <div className="h-40 w-full mt-4 bg-slate-900 rounded-xl relative overflow-hidden flex items-end justify-between p-4 px-10">
-                  <div className="h-10 w-4 bg-blue-500 rounded-t animate-pulse" title="Day 1" />
-                  <div className="h-20 w-4 bg-emerald-500 rounded-t animate-pulse" title="Day 10" />
-                  <div className="h-14 w-4 bg-blue-500 rounded-t animate-pulse" title="Day 15" />
-                  <div className="h-32 w-4 bg-emerald-500 rounded-t animate-pulse" title="Day 20" />
-                  <div className="h-24 w-4 bg-blue-500 rounded-t animate-pulse" title="Today" />
+            return (
+              <div className="space-y-6 animate-fade-in text-start">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200/50 dark:border-slate-800 pb-4 select-none">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900 dark:text-slate-100 font-sans uppercase">
+                      {t("profitMargin")}
+                    </h3>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+                      {language === "ar" ? "أداة مطورة لحساب العوائد والأرباح وإصدار تقارير مخصصة للطباعة" : "Advanced tool for tracking net earnings and printing audited statements"}
+                    </p>
+                  </div>
                   
-                  <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-slate-950/50 to-transparent w-8 pointer-events-none" />
-                </div>
-              </div>
+                  <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                    {/* Period selection widgets */}
+                    <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-950 p-1 border rounded-2xl">
+                      <select
+                        value={reportType}
+                        onChange={(e: any) => setReportType(e.target.value)}
+                        className="py-1 px-2.5 text-xs font-bold bg-white dark:bg-slate-900 border-0 rounded-xl shadow-xs text-slate-800 dark:text-slate-200 cursor-pointer outline-hidden"
+                      >
+                        <option value="daily">{language === "ar" ? "تقرير يومي" : "Daily Statement"}</option>
+                        <option value="monthly">{language === "ar" ? "تدقيق شهري" : "Monthly Audit"}</option>
+                      </select>
 
-            </div>
-          )}
+                      {reportType === "daily" ? (
+                        <input
+                          type="date"
+                          value={selectedReportDate}
+                          onChange={(e) => setSelectedReportDate(e.target.value)}
+                          className="py-1 px-2 text-xs font-black bg-white dark:bg-slate-900 border-0 rounded-xl text-slate-800 dark:text-slate-200 outline-hidden focus:ring-1 focus:ring-indigo-500"
+                        />
+                      ) : (
+                        <input
+                          type="month"
+                          value={selectedReportMonth}
+                          onChange={(e) => setSelectedReportMonth(e.target.value)}
+                          className="py-1 px-2 text-xs font-black bg-white dark:bg-slate-900 border-0 rounded-xl text-slate-800 dark:text-slate-200 outline-hidden focus:ring-1 focus:ring-indigo-500"
+                        />
+                      )}
+                    </div>
+
+                    <button
+                      onClick={handlePrintAuditReport}
+                      className="flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-2xl text-xs font-black shadow-lg shadow-indigo-600/15 cursor-pointer hover:scale-[1.01] active:scale-[0.99] transition-all ml-auto sm:ml-0"
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span>{language === "ar" ? "طباعة التقرير" : "Print Audit Doc"}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Simulated / dynamic Financial calculations viz display */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-850">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider font-mono block">Selected Gross Revenue</span>
+                    <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono mt-1">${onScreenSalesVal.toLocaleString()}</p>
+                    <span className="text-[9px] text-slate-500 font-mono block mt-1">LBP {(onScreenSalesVal * settings.usdToLbpRate).toLocaleString()}</span>
+                  </div>
+                  
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-850">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider font-mono block">Delivery Sur-charges</span>
+                    <p className="text-xl font-black text-slate-950 dark:text-slate-100 font-mono mt-1">${onScreenDeliveryFeesVal.toLocaleString()}</p>
+                    <span className="text-[9px] text-slate-500 font-mono block mt-1">Transit transport values</span>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-red-500/5 border border-red-500/10">
+                    <span className="text-[9px] text-red-500 dark:text-red-400 font-bold uppercase tracking-wider font-mono block">Applied Coupon Discounts</span>
+                    <p className="text-xl font-black text-red-650 dark:text-red-400 font-mono mt-1">-${onScreenDiscountFeesVal.toLocaleString()}</p>
+                    <span className="text-[9px] text-red-400/70 font-sans block mt-1">Subsidized code campaigns</span>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20">
+                    <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider font-mono block">Net Audited Profits</span>
+                    <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono mt-1">${onScreenNetEarningsVal.toLocaleString()}</p>
+                    <span className="text-[9px] text-emerald-600/70 font-mono block mt-1">LBP {(onScreenNetEarningsVal * settings.usdToLbpRate).toLocaleString()}</span>
+                  </div>
+                </div>
+
+                {/* Preview settled orders count segment */}
+                <div className="bg-white dark:bg-slate-900 border rounded-3xl p-5 space-y-4">
+                  <div className="flex justify-between items-center select-none border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <h4 className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest">
+                      {language === "ar" ? "قائمة الوصول والمعاملات بالمسودة" : "Settled Invoices Included in Selection"}
+                    </h4>
+                    <span className="text-[10px] font-bold bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 px-2.5 py-1 rounded-lg">
+                      {filteredReportOrdersOnScreen.length} {language === "ar" ? "طلب مسجل" : "orders matched"}
+                    </span>
+                  </div>
+
+                  {filteredReportOrdersOnScreen.length === 0 ? (
+                    <div className="py-8 text-center bg-slate-50/50 dark:bg-slate-950/20 rounded-2xl border border-dashed text-slate-400">
+                      <span className="text-2xl">💤</span>
+                      <p className="text-xs font-bold mt-1.5 text-slate-400 dark:text-slate-500">
+                        {language === "ar" ? "لا تتوفر مبيعات مؤكدة ومسلمة في التاريخ المحدد." : "No delivered sales found for the selected time configurations."}
+                      </p>
+                      <p className="text-[10px] text-slate-400/70 mt-0.5">
+                        {language === "ar" ? "يرجى تغيير نطاق الاختيار للاستعراض." : "Change period selection or date pick values to review."}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs text-slate-705 dark:text-slate-300">
+                        <thead>
+                          <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 text-[10px] font-black tracking-wider uppercase text-start">
+                            <th className="p-2.5">{language === "ar" ? "الرقم التعريفي" : "Invoice ID"}</th>
+                            <th className="p-2.5">{language === "ar" ? "المشتري" : "Customer"}</th>
+                            <th className="p-2.5">{language === "ar" ? "تاريخ الصفقة" : "Date stamp"}</th>
+                            <th className="p-2.5">{language === "ar" ? "الهاتف" : "Phone"}</th>
+                            <th className="p-2.5 text-right">{language === "ar" ? "القيمة الإجمالية" : "Paid Total"}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredReportOrdersOnScreen.map((o) => (
+                            <tr key={o.id} className="border-b border-slate-50 dark:border-slate-850 hover:bg-slate-50/50 dark:hover:bg-slate-950/25 transition">
+                              <td className="p-2.5 font-mono text-indigo-600 dark:text-indigo-400 font-extrabold text-[10.5px]">
+                                #{o.id.substring(0, 8).toUpperCase()}
+                              </td>
+                              <td className="p-2.5 font-bold text-slate-800 dark:text-slate-200">{o.userName}</td>
+                              <td className="p-2.5 text-slate-400 font-mono text-[10px]">{o.date ? o.date.replace("T", " ").substring(0, 16) : ""}</td>
+                              <td className="p-2.5 font-mono text-slate-500 text-[10.5px]">{o.phone}</td>
+                              <td className="p-2.5 font-black font-mono text-right text-slate-800 dark:text-slate-100">${o.totalUSD.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Graphical Profit Margin Area chart replica */}
+                <div className="p-5 rounded-3xl bg-slate-950 text-white border border-slate-900 text-start">
+                  <div className="flex justify-between items-center sm:block">
+                    <span className="text-xs font-bold text-slate-400 font-mono">Interactive profit index representation</span>
+                    <span className="text-[10px] text-emerald-400 font-mono sm:hidden">▲ healthy margin state</span>
+                  </div>
+                  
+                  {/* SVG vector chart representation */}
+                  <div className="h-40 w-full mt-4 bg-slate-900/50 rounded-2xl relative overflow-hidden flex items-end justify-between p-4 px-10 border border-slate-850">
+                    <div className="h-10 w-4 bg-indigo-500/80 rounded-t-lg transition hover:bg-indigo-400" title="Week 1 Volume" />
+                    <div className="h-24 w-4 bg-emerald-500/80 rounded-t-lg transition hover:bg-emerald-400" title="Week 2 Volume" />
+                    <div className="h-16 w-4 bg-indigo-500/80 rounded-t-lg transition hover:bg-indigo-400" title="Week 3 Volume" />
+                    <div className="h-32 w-4 bg-emerald-500/80 rounded-t-lg transition hover:bg-emerald-400" title="Week 4 Volume" />
+                    <div className="h-28 w-4 bg-blue-500/80 rounded-t-lg transition hover:bg-blue-400 animate-pulse" title="Current Trend" />
+                    
+                    <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-slate-950/80 to-transparent w-10 pointer-events-none" />
+                  </div>
+                </div>
+
+              </div>
+            );
+          })()}
 
           {/* 12. INVENTORY STOCK STAGES */}
           {activeTab === "inventory" && (
