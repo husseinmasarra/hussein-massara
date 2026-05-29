@@ -1,0 +1,122 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Cairo", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Redefine slate palette to be a fresh, highly cheerful and premium Oceanic Lavender Slate for beautiful light & dark mode vibrancy */
+  --color-slate-50: #f5f8ff;  /* Radiant Soft Pearl Sky */
+  --color-slate-100: #eef2fa; /* Friendly Pastel Lavender White secondary background */
+  --color-slate-200: #e0e8f5; /* Fresh crisp sky border */
+  --color-slate-300: #cbdcf0; /* Bright pleasant divider slate */
+  --color-slate-400: #8ba2c4; /* Lucid cheerful slate-blue descriptors */
+  --color-slate-500: #5d7ca8; /* Readable clean denim indigo */
+  --color-slate-600: #425c84; /* Beautiful readable slate navy */
+  --color-slate-700: #2b3e5c; /* Highly readable rich sapphire for headings */
+  --color-slate-800: #1e2a3e; /* Cheerful deep-sea sapphire mode card */
+  --color-slate-850: #141d2d; /* Cheerful sapphire secondary pane */
+  --color-slate-900: #0e1624; /* Starry deep ocean blue panel base */
+  --color-slate-950: #0a0e1a; /* Ultimate luxurious deep midnight ocean */
+
+  /* Redefine primary brand to be a luxurious, vibrant Oceanic Electric Blue & Violet scale (highly cheerful and inviting!) */
+  --color-blue-50: #f0f4ff;
+  --color-blue-100: #e0e7ff;
+  --color-blue-200: #c7d2fe;
+  --color-blue-300: #a5b4fc;
+  --color-blue-400: #818cf8;
+  --color-blue-500: #4f46e5; /* Deep Electric Iris Violet */
+  --color-blue-600: #3b82f6; /* Sparkling Clear sky blue actions */
+  --color-blue-700: #2563eb;
+  --color-blue-800: #1d4ed8;
+  --color-blue-900: #1e1b4b;
+  --color-blue-950: #0f0d30;
+
+  /* Redefine standard grey to match a clean and bright silver pearlescent scale */
+  --color-gray-50: #f8fafc;
+  --color-gray-100: #f1f5f9;
+  --color-gray-150: #e2e8f0;
+  --color-gray-200: #e2e8f0;
+  --color-gray-250: #94a3b8;
+  --color-gray-350: #64748b;
+  --color-gray-400: #64748b;
+  --color-gray-500: #475569;
+  --color-gray-600: #334155;
+  --color-gray-750: #1e293b;
+  --color-gray-800: #0f172a;
+  --color-gray-900: #0f172a;
+  --color-gray-950: #0b0f19;
+
+  /* Accent Pure Emerald/Green & Velvet/Ruby-Red colors of high luxury intensity */
+  --color-emerald-50: #ecfdf5;
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #059669;
+  --color-emerald-700: #047857;
+
+  --color-red-50: #fff5f5;
+  --color-red-500: #f87171;
+  --color-red-600: #ef4444;
+  --color-red-700: #dc2626;
+
+  /* Custom high-contrast theme scales to orchestrate and balance color flow */
+  --color-blue-650: #3b82f6;
+  --color-red-650: #ef4444;
+  --color-slate-450: #8ba2c4;
+  --color-slate-550: #5d7ca8;
+  --color-slate-650: #425c84;
+  --color-slate-705: #2b3e5c;
+  --color-slate-850: #141d2d;
+  --color-gray-150: #e2e8f0;
+  --color-green-150: #d1fae5;
+  --color-green-650: #10b981;
+
+  /* Polishing modular micro-sizes used in layout grids */
+  --font-size-2s: 0.7rem;
+  --font-size-3s: 0.75rem;
+  --font-size-4s: 0.8rem;
+}
+
+@layer base {
+  body {
+    @apply transition-colors duration-300 font-sans antialiased;
+  }
+}
+
+/* Custom transitions and scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.4);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.6);
+}
+
+/* Print layouts styling for reports & orders */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .print-card {
+    border: 1px solid #ccc !important;
+    padding: 15px !important;
+    margin: 10px 0 !important;
+    page-break-inside: avoid !important;
+  }
+}
